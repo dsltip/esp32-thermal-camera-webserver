@@ -4,7 +4,7 @@ MLX90640 thermal camera connected to a ESP32-S
 
 Arduino IDE 1.8.18  with ESP32 2.0.13 and WebSockets 2.4.0
 
-![Screen Shot](enclosure/camera01.jpg)
+![Screen Shot](case/termal_cam.jpg)
 
 ## Instructions
 
@@ -16,6 +16,11 @@ Arduino IDE 1.8.18  with ESP32 2.0.13 and WebSockets 2.4.0
 2. Scan ESP32 IP
 3. Access ESP32 IP with web browser
 
+## Parts used
 
-![Screen Shot](enclosure/camera02.jpg)
+1. ESP-32S module
+2. MLX90640 camera
+3. 3.3V voltage regulator
+4. Type-C male connector
+5. Wires
 
