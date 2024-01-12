@@ -1,4 +1,5 @@
 /*
+IDE 1.8.18
  MLX90640 thermal camera connected to a SparkFun Thing Plus - ESP32 WROOM
 
  Created by: Christopher Black
@@ -7,41 +8,60 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <Wire.h>  // Used for I2C communication
-#include <SFE_MicroOLED.h>  // Include the SFE_MicroOLED library
+//#include <SFE_MicroOLED.h>  // Include the SFE_MicroOLED library
 #include <WebSocketsServer.h>
+#include <HTTPUpdate.h>
+
 #include "MLX90640_API.h"
 #include "MLX90640_I2C_Driver.h"
-#include "env.h"
+//#include "env.h"
 #include "webpage.h"
 
 // MicroOLED variables
-#define PIN_RESET 9  
-#define DC_JUMPER 1 
+//#define PIN_RESET 9  
+//#define DC_JUMPER 1 
 // MicroOLED oled(PIN_RESET, DC_JUMPER);    // I2C declaration
 
 // WiFi variables
-const char* ssid     = wifi_ssid;
-const char* password = wifi_pw;
+const char* ssid     = "DSLAN4G";
+const char* password = "dslan3218";
 WiFiServer server(80);
+IPAddress apIP(192, 168, 214, 1);
+IPAddress locip;
+//IPAddress ip(192,168,253,240);   
+//IPAddress gateway(192,168,253,1);   
+//IPAddress subnet(255,255,255,0);   
 
 
 //declare socket related variables
 WebSocketsServer webSocket = WebSocketsServer(81);
 
 // MLX90640 variables
-#define TA_SHIFT -64; // Default shift for MLX90640 in open air is 8
+//#define TA_SHIFT -64; // Default shift for MLX90640 in open air is 8
+#define TA_SHIFT 8; // Default shift for MLX90640 in open air is 8
 static float mlx90640To[768];
 
 // Used to compress data to the client
-char positive[27] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-char negative[27] = "abcdefghijklmnopqrstuvwxyz";
+char positive[42] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()-_+=9";
+char negative[42] = "abcdefghijklmnopqrstuvwxyz<>.,'|~`?\\/:;{}";
 
 TaskHandle_t TaskA;
 /* this variable hold queue handle */
 xQueueHandle xQueue;
 
 int total = 0;
-
+void update_started() {
+  Serial.println("CALLBACK:  HTTP update process started");
+}
+void update_finished() {
+  Serial.println("CALLBACK:  HTTP update process finished");
+}
+void update_progress(int cur, int total) {
+  Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
+}
+void update_error(int err) {
+  Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
+}
 void setup()
 {
     Serial.begin(115200);
@@ -51,9 +71,9 @@ void setup()
     Serial.println();
     Serial.print("Connecting to ");
     Serial.println(ssid);
-
     // Connect to the WiFi network
     WiFi.begin(ssid, password);
+    //WiFi.config(ip, gateway, subnet);
     WiFi.setHostname("esp32thing1");
     int retry = 0;
     while (WiFi.status() != WL_CONNECTED) {
@@ -69,9 +89,36 @@ void setup()
     }
 
     Serial.println("");
-    Serial.println("WiFi connected.");
+//    Serial.println("WiFi connected!!.");
     Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
+    locip = WiFi.localIP();
+    Serial.println(locip);
+    Serial.println(locip[3]);
+    if(locip[3]==222){
+      WiFiClient client0;
+      httpUpdate.onStart(update_started);
+      httpUpdate.onEnd(update_finished);
+      httpUpdate.onProgress(update_progress);
+      httpUpdate.onError(update_error);
+  
+      t_httpUpdate_return ret = httpUpdate.update(client0, "http://192.168.137.1/esp32termal.bin");
+      switch (ret) {
+        case HTTP_UPDATE_FAILED: Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());   break;
+        case HTTP_UPDATE_NO_UPDATES: Serial.println("HTTP_UPDATE_NO_UPDATES");  break;
+        case HTTP_UPDATE_OK: Serial.println("HTTP_UPDATE_OK");   break;
+      }
+      //while(1==1){};//halt
+    }
+    
+  /*  WiFi.mode(WIFI_AP);
+    delay(10);
+    WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0)); 
+    WiFi.softAP("DSMXL", password); 
+    delay(100);
+    
+    Serial.println("WiFi AP started.");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.softAPIP());*/
 
     if (!MDNS.begin("thermal")) {
         Serial.println("Error setting up MDNS responder!");
@@ -80,7 +127,6 @@ void setup()
         MDNS.addService("ws", "tcp", 81);
         Serial.println("mDNS responder started");
     }
-    
     server.begin();
     
     xQueue = xQueueCreate(1, sizeof(mlx90640To));
@@ -131,6 +177,7 @@ void loop(){
             client.println();
             client.print("<script>const ipAddress = '"); 
             client.print(WiFi.localIP());
+            //client.print(WiFi.softAPIP());
             client.print("'</script>");
             client.println();
             // the content of the HTTP response follows the header:
@@ -160,18 +207,17 @@ void Task1( void * parameter )
     int tick = 0;
     const byte MLX90640_address = 0x33; //Default 7-bit unshifted address of the MLX90640
     
-    MicroOLED oled(PIN_RESET, DC_JUMPER);    // I2C declaration
+   // MicroOLED oled(PIN_RESET, DC_JUMPER);    // I2C declaration
     Wire.setClock(400000L);
     Wire.begin();
     
-    oled.begin();    // Initialize the OLED
-    oled.clear(ALL); // Clear the display's internal memory
-    //oled.display();  // Display what's in the buffer (splashscreen)
-    delay(50);
-    oled.clear(PAGE); // Clear the buffer
-    oled.print("Welcome!");
+    //oled.begin();    // Initialize the OLED
+    //oled.clear(ALL); // Clear the display's internal memory
+    //delay(50);
+    //oled.clear(PAGE); // Clear the buffer
+    //oled.print("Welcome!");
     delay(400);
-    oled.display(); // Draw on the screen
+    //oled.display(); // Draw on the screen
     paramsMLX90640 mlx90640;
     Wire.beginTransmission((uint8_t)MLX90640_address);
     if (Wire.endTransmission() != 0) {
@@ -223,7 +269,7 @@ void Task1( void * parameter )
 //      Serial.print("Read rate: ");
 //      Serial.print( 1000.0 / (stopReadTime - startTime), 2);
 //      Serial.println(" Hz");
-      tick += 1;
+      /*tick += 1;
       if (tick > 10) {
         float maxReading = mlx90640To[0];
         float minReading = mlx90640To[0];
@@ -251,15 +297,15 @@ void Task1( void * parameter )
         String avgOutput = "Avg:";
         avgOutput.concat(avgReading);
         oled.setCursor(0, 0);
-        oled.clear(PAGE); // Clear the buffer
+        oled.clear(PAGE); 
         oled.print(output);
         oled.setCursor(0, 10);
         oled.print(minOutput);
         oled.setCursor(0, 20);
         oled.print(avgOutput);
-        oled.display(); // Draw on the screen
+        oled.display();
         tick = 0;
-      }
+      }*/
       /* time to block the task until the queue has free space */
       const TickType_t xTicksToWait = pdMS_TO_TICKS(100);
       xQueueSendToFront( xQueue, &mlx90640Background, xTicksToWait );
@@ -314,74 +360,29 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
     }
 }
 
-// Some precision is lost during compression but data transfer speeds are
-// much faster. We're able to get a higher frame rate by compressing data.
+
 void compressAndSend() 
 {
-    String resultText = "";
-    int numDecimals = 1;
-    int accuracy = 8;
-    int previousValue = round(mlx90640To[0] * pow(10, numDecimals));
-    previousValue = previousValue - (previousValue % accuracy);
-    resultText.concat(numDecimals);
-    resultText.concat(accuracy);
-    resultText.concat(previousValue);
-    resultText.concat(".");
-    char currentLetter = 'A';
-    char previousLetter = 'A';
-    int letterCount = 1;
-    int columnCount = 32;
-    
-    for (int x = 1 ; x < 768; x += 1)
-    {
-        int currentValue = round(mlx90640To[x] * pow(10, numDecimals));
-        currentValue = currentValue - (currentValue % accuracy);
-        if(x % columnCount == 0) {
-            previousValue = round(mlx90640To[x - columnCount] * pow(10, numDecimals));
-            previousValue = previousValue - (previousValue % accuracy);
-        }
-        int correction = 0;
-        int diffIndex = (int)(currentValue - previousValue);
-        if(abs(diffIndex) > 0) {
-            diffIndex = diffIndex / accuracy;
-        }
-        if(diffIndex > 25) {
-            //correction = (diffIndex - 25) * accuracy;
-            diffIndex = 25;
-        } else if(diffIndex < -25) {
-            //correction = (diffIndex + 25) * accuracy;
-            diffIndex = -25;
-        }
+  String resultText = "";
+  int previousValue = mlx90640To[0]*10;
+  resultText.concat(previousValue);
+  resultText.concat(".");
 
-        if(diffIndex >= 0) {
-            currentLetter = positive[diffIndex];
-        } else {
-            currentLetter = negative[abs(diffIndex)];
-        }
-        
-        if(x == 1) {
-            previousLetter = currentLetter;
-        } else if(currentLetter != previousLetter) {
-            
-            if(letterCount == 1) {
-                resultText.concat(previousLetter);
-            } else {
-                resultText.concat(letterCount);
-                resultText.concat(previousLetter);
-            }
-            previousLetter = currentLetter;
-            letterCount = 1;
-        } else {
-            letterCount += 1;
-        }
-        
-        previousValue = currentValue - correction;
-    }
-    if(letterCount == 1) {
-        resultText.concat(previousLetter);
-    } else {
-        resultText.concat(letterCount);
-        resultText.concat(previousLetter);
-    }
-    webSocket.broadcastTXT(resultText);
+  for (int x = 1 ; x < 768; x += 1)
+  {
+    int currentValue = mlx90640To[x]*10;
+    int diffIndex = abs((int)(currentValue - previousValue));
+       diffIndex = diffIndex / 2;
+       if(diffIndex<41){
+        if(currentValue>previousValue)resultText.concat(positive[diffIndex]); else resultText.concat(negative[diffIndex]);
+       } else {
+         if(diffIndex>409)diffIndex=409;
+         int count = diffIndex / 41;
+         int newIndex = diffIndex - 41*count;
+         resultText.concat(count-1);
+         if(currentValue>previousValue)resultText.concat(positive[newIndex]); else resultText.concat(negative[newIndex]);
+       }
+    if(currentValue> previousValue) previousValue = previousValue + diffIndex*2; else previousValue = previousValue - diffIndex*2;
+  } //end for
+  webSocket.broadcastTXT(resultText);
 }
