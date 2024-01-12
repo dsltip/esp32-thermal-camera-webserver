@@ -24,3 +24,4 @@ Arduino IDE 1.8.18  with ESP32 2.0.13 and WebSockets 2.4.0
 4. Type-C male connector
 5. Wires
 
+![Screen Shot](Case/kettle.jpg)
